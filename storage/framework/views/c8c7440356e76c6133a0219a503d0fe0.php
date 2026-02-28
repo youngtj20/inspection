@@ -1,7 +1,7 @@
 <?php $__env->startSection('title', 'Dashboard'); ?>
 
 <?php $__env->startSection('content'); ?>
-<div x-data="dashboard()" x-init="init()" x-cloak>
+<div x-data="dashboard()" x-init="init()">
     <!-- Loading Overlay -->
     <div x-show="loading" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
         <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
@@ -210,7 +210,7 @@
 <?php $__env->stopSection(); ?>
 
 <?php $__env->startPush('scripts'); ?>
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 function dashboard() {
     return {
@@ -221,13 +221,11 @@ function dashboard() {
 
         init() {
             this.loading = true;
-            try {
+            // Chart.js is loaded synchronously, init immediately
+            this.$nextTick(() => {
                 this.initTrendsChart();
-            } catch (error) {
-                console.error('Error initializing dashboard:', error);
-            } finally {
-                setTimeout(() => this.loading = false, 500);
-            }
+                this.loading = false;
+            });
         },
         
         initTrendsChart() {
