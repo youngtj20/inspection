@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r:*)",
+      "Bash(php:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\xampp\\htdocs\\inspection\\routes"
+    ]
+  }
+}
