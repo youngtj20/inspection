@@ -3,17 +3,7 @@
 @section('title', 'Dashboard')
 
 @section('content')
-<div x-data="dashboard()" x-init="init()">
-    <!-- Loading Overlay -->
-    <div x-show="loading" class="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
-            <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span class="text-gray-700 font-medium">Loading dashboard...</span>
-        </div>
-    </div>
+<div x-data="{ trendsFilter: '8' }">
     
     <!-- Page Header -->
     <div class="mb-6">
@@ -93,14 +83,14 @@
     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold text-gray-800">Inspection Trends</h3>
-            <select x-model="trendsFilter" @change="loadTrends()" class="text-sm border border-gray-300 rounded px-3 py-1">
+            <select id="trendsFilter" onchange="loadTrends(this.value)" class="text-sm border border-gray-300 rounded px-3 py-1">
                 <option value="4">Last 4 Weeks</option>
                 <option value="8" selected>Last 8 Weeks</option>
                 <option value="12">Last 12 Weeks</option>
             </select>
         </div>
         <div class="relative" style="height: 300px;">
-            <canvas id="trendsChart"></canvas>
+            <canvas id="trendsChart" style="display:block;width:100%;height:300px;"></canvas>
         </div>
     </div>
     
@@ -206,128 +196,92 @@
 </div>
 @endsection
 
+@push('styles')
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+@endpush
+
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-function dashboard() {
-    return {
-        stats: @json($stats),
-        trendsFilter: '8',
-        trendsChart: null,
-        loading: false,
+(function () {
+    var trendsChart = null;
+    var chartsUrl = '{{ route("dashboard.charts") }}';
+    var initialTrends = @json($trends);
 
-        init() {
-            this.loading = true;
-            // Chart.js is loaded synchronously, init immediately
-            this.$nextTick(() => {
-                this.initTrendsChart();
-                this.loading = false;
-            });
-        },
-        
-        initTrendsChart() {
-            const ctx = document.getElementById('trendsChart');
-            if (!ctx) return;
-            
-            // Destroy existing chart if it exists
-            if (this.trendsChart) {
-                this.trendsChart.destroy();
-            }
-            
-            const trends = @json($trends);
-            
-            this.trendsChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: trends.labels,
-                    datasets: [
-                        {
-                            label: 'Total',
-                            data: trends.total,
-                            borderColor: 'rgb(59, 130, 246)',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Passed',
-                            data: trends.passed,
-                            borderColor: 'rgb(34, 197, 94)',
-                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Failed',
-                            data: trends.failed,
-                            borderColor: 'rgb(239, 68, 68)',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        }
-                    ]
+    var chartOptions = {
+        type: 'line',
+        data: {
+            labels: initialTrends.labels || [],
+            datasets: [
+                {
+                    label: 'Total',
+                    data: initialTrends.total || [],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: 'white',
-                            bodyColor: 'white',
-                            borderColor: 'rgba(0, 0, 0, 0.1)',
-                            borderWidth: 1
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    }
+                {
+                    label: 'Passed',
+                    data: initialTrends.passed || [],
+                    borderColor: 'rgb(34, 197, 94)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Failed',
+                    data: initialTrends.failed || [],
+                    borderColor: 'rgb(239, 68, 68)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true
                 }
-            });
+            ]
         },
-
-        loadTrends() {
-            if (!this.trendsChart) return;
-            
-            // Reload trends chart with new filter
-            fetch(`{{ route("dashboard.charts") }}?type=trends&weeks=${this.trendsFilter}`)
-                .then(response => {
-                    if (!response.ok) throw new Error('Failed to load trends data');
-                    return response.json();
-                })
-                .then(data => {
-                    this.trendsChart.data.labels = data.labels || [];
-                    this.trendsChart.data.datasets[0].data = data.total || [];
-                    this.trendsChart.data.datasets[1].data = data.passed || [];
-                    this.trendsChart.data.datasets[2].data = data.failed || [];
-                    this.trendsChart.update();
-                })
-                .catch(error => {
-                    console.error('Error loading trends:', error);
-                });
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true } },
+                tooltip: {
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleColor: 'white',
+                    bodyColor: 'white'
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                x: { grid: { display: false } }
+            }
         }
+    };
+
+    function initChart() {
+        var canvas = document.getElementById('trendsChart');
+        if (!canvas) return;
+        trendsChart = new Chart(canvas, chartOptions);
     }
-}
+
+    window.loadTrends = function (weeks) {
+        if (!trendsChart) return;
+        fetch(chartsUrl + '?type=trends&weeks=' + weeks)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                trendsChart.data.labels = data.labels || [];
+                trendsChart.data.datasets[0].data = data.total || [];
+                trendsChart.data.datasets[1].data = data.passed || [];
+                trendsChart.data.datasets[2].data = data.failed || [];
+                trendsChart.update();
+            })
+            .catch(function (e) { console.error('Trends load error:', e); });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initChart);
+    } else {
+        initChart();
+    }
+})();
 </script>
 @endpush
