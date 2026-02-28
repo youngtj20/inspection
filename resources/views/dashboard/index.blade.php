@@ -3,7 +3,7 @@
 @section('title', 'Dashboard')
 
 @section('content')
-<div x-data="{ trendsFilter: '8' }">
+<div>
     
     <!-- Page Header -->
     <div class="mb-6">
@@ -18,7 +18,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-600 mb-1">Total Inspections</p>
-                    <h3 class="text-3xl font-bold text-gray-800" x-text="stats.total_inspections || '0'"></h3>
+                    <h3 class="text-3xl font-bold text-gray-800">{{ number_format($stats['total_inspections'] ?? 0) }}</h3>
                     <p class="text-sm text-green-600 mt-2">
                         <i class="fas fa-calendar-alt mr-1"></i>
                         {{ $stats['stats_month'] ?? '' }}
@@ -29,15 +29,15 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Passed Inspections -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-600 mb-1">Passed <span class="text-xs text-gray-400">(This Month)</span></p>
-                    <h3 class="text-3xl font-bold text-green-600" x-text="stats.passed_inspections || '0'"></h3>
+                    <h3 class="text-3xl font-bold text-green-600">{{ number_format($stats['passed_inspections'] ?? 0) }}</h3>
                     <p class="text-sm text-gray-600 mt-2">
-                        <span x-text="stats.pass_rate || '0'"></span>% pass rate
+                        {{ $stats['pass_rate'] ?? 0 }}% pass rate
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -45,13 +45,13 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Failed Inspections -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-600 mb-1">Failed <span class="text-xs text-gray-400">(This Month)</span></p>
-                    <h3 class="text-3xl font-bold text-red-600" x-text="stats.failed_inspections || '0'"></h3>
+                    <h3 class="text-3xl font-bold text-red-600">{{ number_format($stats['failed_inspections'] ?? 0) }}</h3>
                     <p class="text-sm text-gray-600 mt-2">
                         Requires attention
                     </p>
@@ -61,15 +61,15 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Today's Inspections -->
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-gray-600 mb-1">Today</p>
-                    <h3 class="text-3xl font-bold text-purple-600" x-text="stats.today_inspections || '0'"></h3>
+                    <h3 class="text-3xl font-bold text-purple-600">{{ number_format($stats['today_inspections'] ?? 0) }}</h3>
                     <p class="text-sm text-gray-600 mt-2">
-                        <span x-text="stats.pending_inspections || '0'"></span> pending
+                        {{ number_format($stats['year_inspections'] ?? 0) }} this year
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
