@@ -28,8 +28,9 @@
                     <p class="text-sm text-gray-600 mb-1">Total Inspections</p>
                     <h3 class="text-3xl font-bold text-gray-800" x-text="stats.total_inspections || '0'"></h3>
                     <p class="text-sm text-green-600 mt-2">
-                        <i class="fas fa-arrow-up"></i>
-                        <span x-text="stats.month_inspections || '0'"></span> this month
+                        <i class="fas fa-calendar-alt mr-1"></i>
+                        <?php echo e($stats['stats_month'] ?? ''); ?>
+
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
@@ -42,7 +43,7 @@
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-600 mb-1">Passed</p>
+                    <p class="text-sm text-gray-600 mb-1">Passed <span class="text-xs text-gray-400">(This Month)</span></p>
                     <h3 class="text-3xl font-bold text-green-600" x-text="stats.passed_inspections || '0'"></h3>
                     <p class="text-sm text-gray-600 mt-2">
                         <span x-text="stats.pass_rate || '0'"></span>% pass rate
@@ -58,7 +59,7 @@
         <div class="bg-white rounded-lg shadow-md p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-gray-600 mb-1">Failed</p>
+                    <p class="text-sm text-gray-600 mb-1">Failed <span class="text-xs text-gray-400">(This Month)</span></p>
                     <h3 class="text-3xl font-bold text-red-600" x-text="stats.failed_inspections || '0'"></h3>
                     <p class="text-sm text-gray-600 mt-2">
                         Requires attention
@@ -88,156 +89,95 @@
     </div>
     
     <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <!-- Inspection Trends -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-800">Inspection Trends</h3>
-                <select x-model="trendsFilter" @change="loadTrends()" class="text-sm border border-gray-300 rounded px-3 py-1">
-                    <option value="12">Last 12 Months</option>
-                    <option value="6">Last 6 Months</option>
-                    <option value="3">Last 3 Months</option>
-                </select>
-            </div>
-            <div class="relative" style="height: 300px;">
-                <canvas id="trendsChart"></canvas>
-            </div>
+    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">Inspection Trends</h3>
+            <select x-model="trendsFilter" @change="loadTrends()" class="text-sm border border-gray-300 rounded px-3 py-1">
+                <option value="4">Last 4 Weeks</option>
+                <option value="8" selected>Last 8 Weeks</option>
+                <option value="12">Last 12 Weeks</option>
+            </select>
         </div>
-        
-        <!-- Vehicle Type Distribution -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">Vehicle Type Distribution</h3>
-            <div class="relative" style="height: 300px;">
-                <canvas id="vehicleTypeChart"></canvas>
-            </div>
+        <div class="relative" style="height: 300px;">
+            <canvas id="trendsChart"></canvas>
         </div>
     </div>
     
-    <!-- Tables Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <!-- Recent Inspections -->
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-            <div class="p-6 border-b border-gray-200">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-800">Recent Inspections</h3>
-                    <a href="<?php echo e(route('inspections.index')); ?>" class="text-sm text-blue-600 hover:text-blue-800">
-                        View All <i class="fas fa-arrow-right ml-1"></i>
-                    </a>
-                </div>
-            </div>
-            <div class="overflow-x-auto" style="max-height: 400px;">
-                <table class="w-full">
-                    <thead class="bg-gray-50 sticky top-0">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Series No</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plate No</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        <?php $__empty_1 = true; $__currentLoopData = $recentInspections; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $inspection): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <a href="<?php echo e(route('inspections.show', $inspection->id)); ?>" class="text-blue-600 hover:text-blue-800">
-                                    <?php echo e($inspection->seriesno); ?>
-
-                                </a>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <?php echo e($inspection->plateno); ?>
-
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                <?php echo e(\Carbon\Carbon::parse($inspection->inspectdate)->format('M d, Y')); ?>
-
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <?php if(in_array($inspection->testresult, ['1', 'Y'])): ?>
-                                <span class="px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
-                                    Passed
-                                </span>
-                                <?php elseif(in_array($inspection->testresult, ['0', 'N'])): ?>
-                                <span class="px-2 py-1 text-xs font-semibold text-red-800 bg-red-100 rounded-full">
-                                    Failed
-                                </span>
-                                <?php else: ?>
-                                <span class="px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">
-                                    Pending
-                                </span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                        <tr>
-                            <td colspan="4" class="px-6 py-4 text-center text-gray-500">
-                                No recent inspections
-                            </td>
-                        </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+    <!-- Vehicles Due for Inspection (full width) -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-exclamation-triangle text-orange-500 mr-2"></i>
+                    Vehicles Due for Inspection
+                </h3>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                    <?php echo e(count($upcomingInspections)); ?> vehicles
+                </span>
             </div>
         </div>
-        
-        <!-- Upcoming Inspections -->
-        <div class="bg-white rounded-lg shadow-md overflow-hidden">
-            <div class="p-6 border-b border-gray-200">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-800">Vehicles Due for Inspection</h3>
-                    <span class="text-sm text-gray-600"><?php echo e(count($upcomingInspections)); ?> vehicles</span>
-                </div>
-            </div>
-            <div class="overflow-x-auto" style="max-height: 400px;">
-                <table class="w-full">
-                    <thead class="bg-gray-50 sticky top-0">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plate No</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Inspection</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        <?php $__empty_1 = true; $__currentLoopData = $upcomingInspections; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vehicle): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                                <?php echo e($vehicle->plateno); ?>
+        <div class="overflow-x-auto" style="max-height: 400px;">
+            <table class="w-full">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate No</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Owner</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Inspection</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days Overdue</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    <?php $__empty_1 = true; $__currentLoopData = $upcomingInspections; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vehicle): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                    <tr class="hover:bg-orange-50">
+                        <td class="px-6 py-4 whitespace-nowrap font-semibold text-gray-900">
+                            <?php echo e($vehicle->plateno); ?>
 
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                <?php echo e(Str::limit($vehicle->owner, 20)); ?>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                Type <?php echo e($vehicle->vehicletype); ?>
 
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                <?php if($vehicle->last_inspection_date): ?>
-                                <?php echo e(\Carbon\Carbon::parse($vehicle->last_inspection_date)->format('M d, Y')); ?>
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            <?php echo e(Str::limit($vehicle->owner ?? 'N/A', 25)); ?>
 
-                                <br>
-                                <span class="text-xs text-red-600">
-                                    (<?php echo e($vehicle->days_since_inspection); ?> days ago)
-                                </span>
-                                <?php else: ?>
-                                <span class="text-red-600">Never inspected</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <a href="<?php echo e(route('inspections.create', ['plateno' => $vehicle->plateno])); ?>" 
-                                   class="text-blue-600 hover:text-blue-800">
-                                    <i class="fas fa-plus-circle mr-1"></i> Inspect
-                                </a>
-                            </td>
-                        </tr>
-                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                        <tr>
-                            <td colspan="4" class="px-6 py-4 text-center text-gray-500">
-                                No vehicles due for inspection
-                            </td>
-                        </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                            <?php if($vehicle->last_inspection_date): ?>
+                            <?php echo e(\Carbon\Carbon::parse($vehicle->last_inspection_date)->format('M d, Y')); ?>
+
+                            <?php else: ?>
+                            <span class="text-red-600">Never inspected</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <?php if($vehicle->last_inspection_date): ?>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold
+                                <?php echo e($vehicle->days_since_inspection > 365 ? 'bg-red-100 text-red-800' : 'bg-orange-100 text-orange-800'); ?>">
+                                <?php echo e($vehicle->days_since_inspection); ?> days
+                            </span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <a href="<?php echo e(route('inspections.create', ['plateno' => $vehicle->plateno])); ?>"
+                               class="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition">
+                                <i class="fas fa-plus-circle mr-1"></i> Inspect
+                            </a>
+                        </td>
+                    </tr>
+                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                    <tr>
+                        <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                            <i class="fas fa-check-circle text-4xl text-green-400 mb-3 block"></i>
+                            All vehicles are up to date with inspections
+                        </td>
+                    </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
     
@@ -275,16 +215,14 @@
 function dashboard() {
     return {
         stats: <?php echo json_encode($stats, 15, 512) ?>,
-        trendsFilter: '12',
+        trendsFilter: '8',
         trendsChart: null,
-        vehicleTypeChart: null,
         loading: false,
-        
+
         init() {
             this.loading = true;
             try {
                 this.initTrendsChart();
-                this.initVehicleTypeChart();
             } catch (error) {
                 console.error('Error initializing dashboard:', error);
             } finally {
@@ -373,82 +311,12 @@ function dashboard() {
                 }
             });
         },
-        
-        initVehicleTypeChart() {
-            const ctx = document.getElementById('vehicleTypeChart');
-            if (!ctx) return;
-            
-            // Destroy existing chart if it exists
-            if (this.vehicleTypeChart) {
-                this.vehicleTypeChart.destroy();
-            }
-            
-            fetch('<?php echo e(route("dashboard.charts")); ?>?type=vehicle_types')
-                .then(response => {
-                    if (!response.ok) throw new Error('Failed to load chart data');
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.labels && data.labels.length > 0) {
-                        this.vehicleTypeChart = new Chart(ctx, {
-                            type: 'doughnut',
-                            data: {
-                                labels: data.labels || [],
-                                datasets: [{
-                                    data: data.data || [],
-                                    backgroundColor: [
-                                        'rgb(59, 130, 246)',
-                                        'rgb(34, 197, 94)',
-                                        'rgb(239, 68, 68)',
-                                        'rgb(168, 85, 247)',
-                                        'rgb(251, 146, 60)',
-                                        'rgb(236, 72, 153)',
-                                        'rgb(14, 165, 233)',
-                                        'rgb(245, 158, 11)'
-                                    ],
-                                    borderWidth: 2,
-                                    borderColor: 'white'
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                cutout: '60%',
-                                plugins: {
-                                    legend: {
-                                        position: 'bottom',
-                                        labels: {
-                                            padding: 20,
-                                            usePointStyle: true,
-                                            pointStyle: 'circle'
-                                        }
-                                    },
-                                    tooltip: {
-                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                        titleColor: 'white',
-                                        bodyColor: 'white',
-                                        borderColor: 'rgba(0, 0, 0, 0.1)',
-                                        borderWidth: 1
-                                    }
-                                },
-                                animation: {
-                                    animateRotate: true,
-                                    animateScale: true
-                                }
-                            }
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error loading vehicle type chart:', error);
-                });
-        },
-        
+
         loadTrends() {
             if (!this.trendsChart) return;
             
             // Reload trends chart with new filter
-            fetch(`<?php echo e(route("dashboard.charts")); ?>?type=trends&months=${this.trendsFilter}`)
+            fetch(`<?php echo e(route("dashboard.charts")); ?>?type=trends&weeks=${this.trendsFilter}`)
                 .then(response => {
                     if (!response.ok) throw new Error('Failed to load trends data');
                     return response.json();

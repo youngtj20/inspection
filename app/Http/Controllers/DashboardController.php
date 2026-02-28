@@ -33,17 +33,14 @@ class DashboardController extends Controller
         
         // Get statistics
         $stats = $this->getStatistics($deptId);
-        
-        // Get recent inspections
-        $recentInspections = $this->getRecentInspections($deptId);
-        
+
         // Get upcoming inspections (vehicles due for inspection)
         $upcomingInspections = $this->getUpcomingInspections($deptId);
-        
+
         // Get inspection trends
         $trends = $this->getInspectionTrends($deptId);
-        
-        return view('dashboard.index', compact('stats', 'recentInspections', 'upcomingInspections', 'trends'));
+
+        return view('dashboard.index', compact('stats', 'upcomingInspections', 'trends'));
     }
     
     private function getStatistics($deptId)
@@ -79,11 +76,13 @@ class DashboardController extends Controller
                 ->count()
         );
 
-        // --- Slow totals: pass/fail + total — cache 6 hours (historical data, barely changes) ---
-        $slowStats = cache()->remember("stat_totals_{$dept}", 21600, function () use ($deptId, $isSuperAdmin) {
+        // --- Month totals: pass/fail scoped to current month only (fast — uses createDate index) ---
+        $monthKey = now()->format('Y-m');
+        $slowStats = cache()->remember("stat_totals_{$dept}_{$monthKey}", 600, function () use ($deptId, $isSuperAdmin) {
             $passFail = DB::table('i_data_base')
                 ->select('testresult', DB::raw('COUNT(*) as cnt'))
                 ->when($deptId && !$isSuperAdmin, fn($q) => $q->where('dept_id', $deptId))
+                ->where('createDate', '>=', Carbon::now()->startOfMonth())
                 ->groupBy('testresult')
                 ->pluck('cnt', 'testresult');
 
@@ -121,17 +120,18 @@ class DashboardController extends Controller
             : 0;
 
         $stats = [
-            'total_inspections'   => $slowStats['total'],
+            'total_inspections'   => $slowStats['total'],   // current month total
             'today_inspections'   => $todayInspections,
             'month_inspections'   => $monthInspections,
             'year_inspections'    => $yearInspections,
-            'passed_inspections'  => $slowStats['passed'],
-            'failed_inspections'  => $slowStats['failed'],
+            'passed_inspections'  => $slowStats['passed'],  // current month passed
+            'failed_inspections'  => $slowStats['failed'],  // current month failed
             'pending_inspections' => $slowStats['pending'],
             'total_vehicles'      => $totalVehicles,
             'active_inspectors'   => $activeInspectors,
             'equipment_count'     => $equipmentCount,
             'pass_rate'           => $passRate,
+            'stats_month'         => Carbon::now()->format('M Y'),
         ];
 
         // Store assembled result for 5 minutes — next visit is a single cache read
@@ -151,37 +151,43 @@ class DashboardController extends Controller
     
     private function getRecentInspections($deptId, $limit = 10)
     {
-        return DB::table('i_data_base')
-            ->select(
-                'i_data_base.id',
-                'i_data_base.plateno',
-                'i_data_base.vehicletype',
-                'i_data_base.seriesno',
-                'i_data_base.inspectdate',
-                'i_data_base.testresult',
-                'i_data_base.inspector',
-                'i_data_base.createDate',
-                'i_vehicle_register.makeofvehicle',
-                'i_vehicle_register.model',
-                'i_vehicle_register.owner',
-                'sys_dept.title as department_name'
-            )
-            ->leftJoin('i_vehicle_register', function($join) {
-                $join->on('i_data_base.plateno', '=', 'i_vehicle_register.plateno')
-                     ->on('i_data_base.vehicletype', '=', 'i_vehicle_register.vehicletype')
-                     ->on('i_data_base.seriesno', '=', 'i_vehicle_register.seriesno')
-                     ->on('i_data_base.inspecttimes', '=', 'i_vehicle_register.inspecttimes');
-            })
-            ->leftJoin('sys_dept', 'i_data_base.dept_id', '=', 'sys_dept.id')
-            ->when($deptId && !$this->isSuperAdmin(), fn($q) => $q->where('i_data_base.dept_id', $deptId))
-            ->orderByDesc('i_data_base.createDate')
-            ->limit($limit)
-            ->get();
+        $dept = $deptId ?: 'all';
+        // Cache 2 min — scoped to today so it stays fresh without hammering the JOIN
+        $key = "recent_insp_{$dept}_" . Carbon::today()->format('Y-m-d') . "_{$limit}";
+        return cache()->remember($key, 120, function () use ($deptId, $limit) {
+            return DB::table('i_data_base')
+                ->select(
+                    'i_data_base.id',
+                    'i_data_base.plateno',
+                    'i_data_base.vehicletype',
+                    'i_data_base.seriesno',
+                    'i_data_base.inspectdate',
+                    'i_data_base.testresult',
+                    'i_data_base.inspector',
+                    'i_data_base.createDate',
+                    'i_vehicle_register.makeofvehicle',
+                    'i_vehicle_register.model',
+                    'i_vehicle_register.owner',
+                    'sys_dept.title as department_name'
+                )
+                ->leftJoin('i_vehicle_register', function ($join) {
+                    $join->on('i_data_base.plateno', '=', 'i_vehicle_register.plateno')
+                         ->on('i_data_base.vehicletype', '=', 'i_vehicle_register.vehicletype')
+                         ->on('i_data_base.seriesno', '=', 'i_vehicle_register.seriesno')
+                         ->on('i_data_base.inspecttimes', '=', 'i_vehicle_register.inspecttimes');
+                })
+                ->leftJoin('sys_dept', 'i_data_base.dept_id', '=', 'sys_dept.id')
+                ->when($deptId && !$this->isSuperAdmin(), fn($q) => $q->where('i_data_base.dept_id', $deptId))
+                ->where('i_data_base.createDate', '>=', Carbon::now()->startOfMonth())
+                ->orderByDesc('i_data_base.createDate')
+                ->limit($limit)
+                ->get();
+        });
     }
     
     private function getUpcomingInspections($deptId, $limit = 10)
     {
-        // Get distinct vehicles from i_data_base whose last inspection was over 11 months ago
+        // Vehicles whose last inspection was over 11 months ago (due for annual re-inspection)
         $elevenMonthsAgo = Carbon::now()->subMonths(11)->format('Y-m-d');
 
         return DB::table('i_data_base as d')
@@ -189,59 +195,45 @@ class DashboardController extends Controller
                 'd.plateno',
                 'd.vehicletype',
                 'd.owner',
-                'r.makeofvehicle',
-                'r.model',
                 DB::raw('MAX(d.inspectdate) as last_inspection_date'),
                 DB::raw('DATEDIFF(NOW(), MAX(d.inspectdate)) as days_since_inspection')
             )
-            ->leftJoin('i_vehicle_register as r', function($join) {
-                $join->on('d.plateno', '=', 'r.plateno')
-                     ->on('d.vehicletype', '=', 'r.vehicletype')
-                     ->on('d.seriesno', '=', 'r.seriesno');
-            })
             ->when($deptId && !$this->isSuperAdmin(), fn($q) => $q->where('d.dept_id', $deptId))
-            ->groupBy('d.plateno', 'd.vehicletype', 'd.owner', 'r.makeofvehicle', 'r.model')
+            ->groupBy('d.plateno', 'd.vehicletype', 'd.owner')
             ->havingRaw('MAX(d.inspectdate) < ?', [$elevenMonthsAgo])
             ->orderByRaw('MAX(d.inspectdate) ASC')
             ->limit($limit)
             ->get();
     }
     
-    private function getInspectionTrends($deptId, $months = 12)
+    private function getInspectionTrends($deptId, $weeks = 8)
     {
-        $startDate = Carbon::now()->subMonths($months);
-        
-        // Cache key for trends
-        $cacheKey = "trends_" . ($deptId ?: 'all') . "_" . $months . "_" . $startDate->format('Y-m');
-        
-        if (cache()->has($cacheKey)) {
-            return cache($cacheKey);
-        }
-        
-        $data = DB::table('i_data_base')
-            ->select(
-                DB::raw('DATE_FORMAT(inspectdate, "%Y-%m") as month'),
-                DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(CASE WHEN testresult IN ("1", "Y") THEN 1 ELSE 0 END) as passed'),
-                DB::raw('SUM(CASE WHEN testresult IN ("0", "N") THEN 1 ELSE 0 END) as failed')
-            )
-            ->where('inspectdate', '>=', $startDate)
-            ->when($deptId && !$this->isSuperAdmin(), fn($q) => $q->where('dept_id', $deptId))
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
-        
-        $result = [
-            'labels' => $data->pluck('month')->toArray(),
-            'total' => $data->pluck('total')->toArray(),
-            'passed' => $data->pluck('passed')->toArray(),
-            'failed' => $data->pluck('failed')->toArray(),
-        ];
-        
-        // Cache for 30 minutes
-        cache([$cacheKey => $result], now()->addMinutes(30));
-        
-        return $result;
+        $dept      = $deptId ?: 'all';
+        $startDate = Carbon::now()->startOfWeek()->subWeeks($weeks - 1);
+        $cacheKey  = "trends_weekly_{$dept}_{$weeks}_" . $startDate->format('Y-W');
+
+        return cache()->remember($cacheKey, 300, function () use ($deptId, $startDate) {
+            $data = DB::table('i_data_base')
+                ->select(
+                    DB::raw('YEARWEEK(inspectdate, 1) as yw'),
+                    DB::raw('MIN(inspectdate) as week_start'),
+                    DB::raw('COUNT(*) as total'),
+                    DB::raw('SUM(CASE WHEN testresult IN ("1","Y") THEN 1 ELSE 0 END) as passed'),
+                    DB::raw('SUM(CASE WHEN testresult IN ("0","N") THEN 1 ELSE 0 END) as failed')
+                )
+                ->where('inspectdate', '>=', $startDate->format('Y-m-d'))
+                ->when($deptId && !$this->isSuperAdmin(), fn($q) => $q->where('dept_id', $deptId))
+                ->groupBy('yw')
+                ->orderBy('yw')
+                ->get();
+
+            return [
+                'labels' => $data->map(fn($r) => Carbon::parse($r->week_start)->format('M d'))->toArray(),
+                'total'  => $data->pluck('total')->toArray(),
+                'passed' => $data->pluck('passed')->toArray(),
+                'failed' => $data->pluck('failed')->toArray(),
+            ];
+        });
     }
     
     public function getStats(Request $request)
@@ -255,12 +247,12 @@ class DashboardController extends Controller
     public function getChartData(Request $request)
     {
         $deptId = auth()->user()->dept_id;
-        $type = $request->get('type', 'trends');
-        $months = $request->get('months', 12);
-        
+        $type  = $request->get('type', 'trends');
+        $weeks = (int) $request->get('weeks', 8);
+
         switch ($type) {
             case 'trends':
-                return response()->json($this->getInspectionTrends($deptId, $months));
+                return response()->json($this->getInspectionTrends($deptId, $weeks));
             
             case 'vehicle_types':
                 return response()->json($this->getVehicleTypeDistribution($deptId));
