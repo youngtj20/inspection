@@ -30,12 +30,12 @@
 
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Department <span class="text-danger">*</span></label>
-                        <select name="dept_id" class="form-control @error('dept_id') is-invalid @enderror" required>
-                            <option value="">Select Department</option>
-                            @foreach($departments as $dept)
-                                <option value="{{ $dept->id }}">{{ $dept->title }}</option>
-                            @endforeach
-                        </select>
+                        @include('partials.dept-select', [
+                            'name'     => 'dept_id',
+                            'selected' => old('dept_id'),
+                            'allLabel' => 'Select Department',
+                            'class'    => 'form-control' . ($errors->has('dept_id') ? ' is-invalid' : ''),
+                        ])
                         @error('dept_id')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror

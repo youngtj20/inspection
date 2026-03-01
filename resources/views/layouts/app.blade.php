@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') - Vehicle Inspection System</title>
-    
+    <link rel="icon" type="image/png" href="{{ asset('logo.png') }}">
+
     <!-- DNS prefetch / preconnect for CDN hosts -->
     <link rel="preconnect" href="https://cdn.tailwindcss.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -14,6 +15,9 @@
     <!-- Font Awesome (CSS — load before body so icons render immediately) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <!-- Tom Select — searchable dropdowns -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.min.css">
+
     <!-- Tailwind CSS — deferred so it doesn't block page render -->
     <script defer src="https://cdn.tailwindcss.com"></script>
 
@@ -21,6 +25,19 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
     
     <style>
+        /* ── Page-load progress bar ── */
+        #nprogress-bar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa, #93c5fd);
+            z-index: 9999;
+            transition: width .25s ease, opacity .4s ease;
+            box-shadow: 0 0 8px rgba(59,130,246,.6);
+        }
+        #nprogress-bar.done { width: 100% !important; opacity: 0; }
+
         [x-cloak] { display: none !important; }
         .sidebar-link.active {
             background-color: #3b82f6;
@@ -50,6 +67,73 @@
         aside.collapsed nav a i {
             margin: 0;
             width: auto;
+        }
+
+        /* ── Tom Select overrides — match Tailwind form style ── */
+        .ts-wrapper { width: 100%; }
+        .ts-wrapper.single .ts-control,
+        .ts-wrapper.multi .ts-control {
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.5rem;     /* rounded-lg */
+            padding: 0.4rem 0.75rem;
+            min-height: 2.4rem;
+            font-size: 0.875rem;
+            box-shadow: none;
+            background: #fff;
+            cursor: pointer;
+        }
+        .ts-wrapper.single.focus .ts-control,
+        .ts-wrapper.multi.focus .ts-control {
+            border-color: #3b82f6;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59,130,246,.25);
+        }
+        .ts-dropdown {
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,.1);
+            font-size: 0.875rem;
+        }
+        .ts-dropdown .option {
+            padding: 0.45rem 0.75rem;
+        }
+        .ts-dropdown .option:hover,
+        .ts-dropdown .option.active {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+        .ts-dropdown .option-group-header {
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: #6b7280;
+            padding: 0.4rem 0.75rem 0.2rem;
+            background: #f9fafb;
+        }
+        /* Keep multi-select (dept report) looking clean */
+        .ts-wrapper.multi .ts-control .item {
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 0.25rem;
+            padding: 0.1rem 0.4rem;
+            font-size: 0.75rem;
+        }
+        /* Search input inside the control */
+        .ts-control input {
+            font-size: 0.875rem !important;
+        }
+        /* State-level options get subtle background */
+        .ts-dropdown .ts-opt-state {
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+        .ts-dropdown .ts-opt-state:first-child {
+            border-top: none;
+        }
+        /* Center options slightly indented */
+        .ts-dropdown .ts-opt-center {
+            background: #fff;
         }
 
         body { overflow-x: hidden; }
@@ -104,7 +188,7 @@
             <!-- Logo -->
             <div class="flex items-center justify-between h-16 px-4 bg-gray-800 flex-shrink-0">
                 <div class="flex items-center min-w-0">
-                    <i class="fas fa-car text-2xl text-blue-500 flex-shrink-0"></i>
+                    <img src="{{ asset('logo.png') }}" alt="Logo" class="w-8 h-8 object-contain flex-shrink-0">
                     <span x-show="!sidebarCollapsed" class="ml-3 text-lg font-semibold whitespace-nowrap overflow-hidden sidebar-logo-text">VIS Nigeria</span>
                 </div>
                 <!-- Collapse toggle (desktop) -->
@@ -293,5 +377,113 @@
     </div>
     
     @stack('scripts')
+
+    <!-- Tom Select JS + init -->
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <script>
+    (function () {
+        /**
+         * Initialise Tom Select on every <select> with class "ts-select".
+         * Safe to call multiple times — skips already-initialised elements.
+         */
+        function initTomSelects() {
+            document.querySelectorAll('select.ts-select').forEach(function (el) {
+                if (el.tomselect) return; // already initialised
+
+                var isMulti = el.multiple;
+
+                new TomSelect(el, {
+                    plugins: isMulti ? ['remove_button', 'checkbox_options'] : [],
+                    maxOptions: 500,
+                    create: false,
+                    allowEmptyOption: !isMulti,
+                    maxItems: isMulti ? null : 1,
+                    selectOnTab: true,
+                    closeAfterSelect: !isMulti,
+                    render: {
+                        option: function (data, escape) {
+                            var isState = data.element && data.element.dataset.deptType === 'state';
+                            if (isState) {
+                                return '<div class="option ts-opt-state">'
+                                    + '<span style="font-weight:700;color:#374151;">&#9658; ' + escape(data.text) + '</span>'
+                                    + '</div>';
+                            }
+                            var isCenter = data.element && data.element.dataset.deptType === 'center';
+                            if (isCenter) {
+                                return '<div class="option ts-opt-center" style="padding-left:1.5rem;">'
+                                    + '<span style="color:#4b5563;">&#8627; ' + escape(data.text) + '</span>'
+                                    + '</div>';
+                            }
+                            return '<div class="option">' + escape(data.text) + '</div>';
+                        },
+                        item: function (data, escape) {
+                            var isState = data.element && data.element.dataset.deptType === 'state';
+                            var prefix = isState ? '&#9658; ' : '';
+                            return '<div class="item">' + prefix + escape(data.text) + '</div>';
+                        }
+                    }
+                });
+            });
+        }
+
+        // Run on initial load — this script is at end of <body>, DOM is already ready
+        initTomSelects();
+
+        // Re-run when Alpine reveals hidden panels (x-show / x-collapse mutates the DOM)
+        var _tsObserver = new MutationObserver(function () {
+            var unInit = document.querySelectorAll('select.ts-select:not(.tomselected)');
+            if (unInit.length) initTomSelects();
+        });
+        _tsObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+    })();
+    </script>
+
+    <!-- Page-load progress bar -->
+    <div id="nprogress-bar"></div>
+    <script>
+    (function () {
+        var bar = document.getElementById('nprogress-bar');
+        var trickle, width = 1;
+
+        function start() {
+            width = 1;
+            bar.style.opacity = '1';
+            bar.style.width = width + '%';
+            trickle = setInterval(function () {
+                // slow down as it approaches 90%
+                var inc = width < 30 ? 4 : width < 60 ? 2 : width < 80 ? 1 : 0.4;
+                width = Math.min(width + inc, 90);
+                bar.style.width = width + '%';
+            }, 200);
+        }
+
+        function done() {
+            clearInterval(trickle);
+            bar.style.width = '100%';
+            setTimeout(function () { bar.classList.add('done'); }, 250);
+            setTimeout(function () {
+                bar.classList.remove('done');
+                bar.style.width = '0%';
+            }, 700);
+        }
+
+        // Start immediately (page just loaded into JS)
+        start();
+        // Finish when page is fully loaded
+        window.addEventListener('load', done);
+
+        // Also hook anchor/form navigation (non-AJAX)
+        document.addEventListener('click', function (e) {
+            var a = e.target.closest('a[href]');
+            if (!a) return;
+            var href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('javascript') || a.target === '_blank') return;
+            start();
+        });
+        document.addEventListener('submit', function (e) {
+            if (e.target.tagName === 'FORM') start();
+        });
+    })();
+    </script>
 </body>
 </html>

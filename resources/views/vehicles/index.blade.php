@@ -76,9 +76,9 @@
                 <div class="flex items-center gap-3">
                     <i class="fas fa-filter text-gray-600"></i>
                     <h3 class="text-lg font-semibold text-gray-800">Search / Filter</h3>
-                    @if(request()->anyFilled(['plate_no','owner','chassis_no']))
+                    @if(request()->anyFilled(['plate_no','owner','chassis_no','department']))
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
-                        {{ collect(['plate_no','owner','chassis_no'])->filter(fn($k) => request()->filled($k))->count() }} active
+                        {{ collect(['plate_no','owner','chassis_no','department'])->filter(fn($k) => request()->filled($k))->count() }} active
                     </span>
                     @endif
                 </div>
@@ -88,7 +88,7 @@
         
         <div x-show="showFilters" x-collapse class="px-6 py-4">
             <form method="GET" action="{{ route('vehicles.index') }}">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- Plate Number -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -123,6 +123,19 @@
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                placeholder="Chassis number"
                                value="{{ request('chassis_no') }}">
+                    </div>
+
+                    <!-- Department -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-building text-gray-400 mr-1"></i>
+                            Department
+                        </label>
+                        @include('partials.dept-select', [
+                            'name'     => 'department',
+                            'selected' => request('department'),
+                            'class'    => 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dept-select-searchable',
+                        ])
                     </div>
                 </div>
 

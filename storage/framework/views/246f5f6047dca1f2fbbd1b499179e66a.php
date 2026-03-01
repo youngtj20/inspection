@@ -16,65 +16,43 @@
     </div>
 </div>
 
-<!-- Filter Form -->
-<div class="bg-white rounded-lg shadow-md p-6 mb-6">
-    <form method="GET" action="<?php echo e(route('reports.department')); ?>" id="deptReportForm">
-        <div class="flex flex-wrap items-start gap-6">
 
-            
-            <div class="flex-1 min-w-[240px]">
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Select Department(s)
-                    <span class="text-xs text-gray-400 ml-1">(hold Ctrl / Cmd to select multiple)</span>
-                </label>
-                <select name="departments[]" multiple
-                        class="w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        style="height: 160px; padding: 4px 8px;">
-                    <?php $__currentLoopData = $departments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $dept): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                        <option value="<?php echo e($dept->id); ?>"
-                            <?php echo e(in_array($dept->id, $deptIds ?? []) ? 'selected' : ''); ?>
-
-                            class="py-1 px-2 rounded cursor-pointer">
-                            <?php echo e($dept->title); ?>
-
-                        </option>
-                    <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">
-                    <?php echo e(count($deptIds ?? [])); ?> department(s) selected
-                </p>
-            </div>
-
-            
-            <div class="flex flex-col gap-3">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">From Date</label>
-                    <input type="date" name="date_from" value="<?php echo e($dateFrom ?? ''); ?>"
-                           class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">To Date</label>
-                    <input type="date" name="date_to" value="<?php echo e($dateTo ?? ''); ?>"
-                           class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                </div>
-                <div class="flex gap-2 mt-1">
-                    <button type="submit"
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg flex items-center">
-                        <i class="fas fa-filter mr-2"></i>Generate Report
-                    </button>
-                    <?php if(!empty($deptIds)): ?>
-                    <button type="submit" name="format" value="pdf"
-                            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg flex items-center">
-                        <i class="fas fa-file-pdf mr-2"></i>PDF
-                    </button>
-                    <?php endif; ?>
-                </div>
-            </div>
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+    <form method="GET" action="<?php echo e(route('reports.department')); ?>" class="flex flex-wrap items-end gap-4">
+        <div style="min-width:200px;">
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Department</label>
+            <?php echo $__env->make('partials.dept-select', [
+                'name'     => 'department',
+                'selected' => request('department'),
+                'class'    => 'px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+            ], \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">From Date</label>
+            <input type="date" name="date_from" value="<?php echo e($dateFrom ?? ''); ?>"
+                   class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">To Date</label>
+            <input type="date" name="date_to" value="<?php echo e($dateTo ?? ''); ?>"
+                   class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button type="submit"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-filter"></i>Generate Report
+            </button>
+            <?php if(!empty($deptId)): ?>
+            <button type="submit" name="format" value="pdf"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-file-pdf"></i>PDF
+            </button>
+            <?php endif; ?>
         </div>
     </form>
 </div>
 
-<?php if(!empty($deptIds) && isset($stats)): ?>
+<?php if(!empty($deptId) && isset($stats)): ?>
 
 
 <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-lg p-6 mb-6 text-white">
@@ -82,12 +60,12 @@
         <div>
             <?php if($department): ?>
                 <h2 class="text-2xl font-bold"><?php echo e($department->title); ?></h2>
-            <?php else: ?>
-                <h2 class="text-2xl font-bold"><?php echo e(count($deptIds)); ?> Departments Combined</h2>
+                <?php if(count($deptBreakdown) > 1): ?>
                 <p class="text-blue-100 mt-1 text-sm">
                     <?php echo e(collect($deptBreakdown)->pluck('title')->implode(' · ')); ?>
 
                 </p>
+                <?php endif; ?>
             <?php endif; ?>
             <p class="text-blue-100 mt-1">
                 Report Period: <?php echo e(\Carbon\Carbon::parse($dateFrom)->format('M d, Y')); ?> – <?php echo e(\Carbon\Carbon::parse($dateTo)->format('M d, Y')); ?>
@@ -247,24 +225,14 @@
 
 <?php else: ?>
 
-<div class="bg-white rounded-lg shadow-md p-12 text-center">
+<div class="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
     <i class="fas fa-building text-6xl text-gray-300 mb-4"></i>
-    <h3 class="text-xl font-semibold text-gray-800 mb-2">Select One or More Departments</h3>
-    <p class="text-gray-500">Hold <kbd class="px-1 py-0.5 text-xs bg-gray-100 border border-gray-300 rounded">Ctrl</kbd>
-        (or <kbd class="px-1 py-0.5 text-xs bg-gray-100 border border-gray-300 rounded">Cmd</kbd> on Mac)
-        and click to select multiple departments, then click Generate Report.</p>
+    <h3 class="text-xl font-semibold text-gray-800 mb-2">Select a Department</h3>
+    <p class="text-gray-500 text-sm">Choose a department or state from the dropdown above, then click Generate Report.<br>
+        Selecting a state will show all its centers combined.</p>
 </div>
 <?php endif; ?>
 <?php $__env->stopSection(); ?>
 
-<?php $__env->startPush('scripts'); ?>
-<script>
-// Show live count of selected departments
-document.querySelector('select[name="departments[]"]').addEventListener('change', function () {
-    this.closest('.flex-1').querySelector('p').textContent =
-        this.selectedOptions.length + ' department(s) selected';
-});
-</script>
-<?php $__env->stopPush(); ?>
 
 <?php echo $__env->make('layouts.app', \Illuminate\Support\Arr::except(get_defined_vars(), ['__data', '__path']))->render(); ?><?php /**PATH C:\Users\talk2\OneDrive\Desktop\inspection\resources\views/reports/department.blade.php ENDPATH**/ ?>

@@ -229,9 +229,9 @@ class DashboardController extends Controller
 
             return [
                 'labels' => $data->map(fn($r) => Carbon::parse($r->week_start)->format('M d'))->toArray(),
-                'total'  => $data->pluck('total')->toArray(),
-                'passed' => $data->pluck('passed')->toArray(),
-                'failed' => $data->pluck('failed')->toArray(),
+                'total'  => $data->pluck('total')->map(fn($v) => (int) $v)->toArray(),
+                'passed' => $data->pluck('passed')->map(fn($v) => (int) $v)->toArray(),
+                'failed' => $data->pluck('failed')->map(fn($v) => (int) $v)->toArray(),
             ];
         });
     }

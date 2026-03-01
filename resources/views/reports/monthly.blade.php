@@ -24,17 +24,13 @@
             <input type="month" name="month" value="{{ $month }}"
                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
         </div>
-        <div>
+        <div style="min-width:200px;">
             <label class="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">Department</label>
-            <select name="department"
-                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[180px]">
-                <option value="">All Departments</option>
-                @foreach($departments as $dept)
-                    <option value="{{ $dept->id }}" {{ request('department') == $dept->id ? 'selected' : '' }}>
-                        {{ $dept->title }}
-                    </option>
-                @endforeach
-            </select>
+            @include('partials.dept-select', [
+                'name'     => 'department',
+                'selected' => request('department'),
+                'class'    => 'px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+            ])
         </div>
         <div class="flex flex-wrap gap-2">
             <button type="submit"

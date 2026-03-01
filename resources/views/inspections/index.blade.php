@@ -114,15 +114,11 @@
                             <i class="fas fa-building text-gray-400 mr-1"></i>
                             Department
                         </label>
-                        <select name="department"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option value="">All Departments</option>
-                            @foreach($departments as $dept)
-                                <option value="{{ $dept->id }}" {{ request('department') == $dept->id ? 'selected' : '' }}>
-                                    {{ $dept->title }}
-                                </option>
-                            @endforeach
-                        </select>
+                        @include('partials.dept-select', [
+                            'name'     => 'department',
+                            'selected' => request('department'),
+                            'class'    => 'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                        ])
                     </div>
 
                     <!-- From Date -->
@@ -154,7 +150,7 @@
                             Test Result
                         </label>
                         <select name="test_result"
-                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                class="ts-select w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                             <option value="">All Results</option>
                             <option value="Y" {{ request('test_result') === 'Y' ? 'selected' : '' }}>Passed</option>
                             <option value="N" {{ request('test_result') === 'N' ? 'selected' : '' }}>Failed</option>
@@ -193,7 +189,7 @@
                         @endif
                         @if(request('department'))
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                Dept: {{ $departments->firstWhere('id', request('department'))->title ?? request('department') }}
+                                Dept: {{ $deptLookup[request('department')] ?? request('department') }}
                                 <a href="{{ route('inspections.index', request()->except('department')) }}" class="ml-2 hover:text-yellow-900">×</a>
                             </span>
                         @endif
@@ -365,11 +361,6 @@
                                         <i class="fas fa-certificate text-sm"></i>
                                     </a>
                                     @endif
-                                    <button @click="deleteInspection({{ $inspection->id }})" 
-                                            class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition duration-150" 
-                                            title="Delete">
-                                        <i class="fas fa-trash text-sm"></i>
-                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -407,28 +398,6 @@ function inspectionsPage() {
     return {
         showFilters: true,
         
-        deleteInspection(id) {
-            if (confirm('Are you sure you want to delete this inspection record? This action cannot be undone.')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = `/inspections/${id}`;
-                
-                const csrfToken = document.createElement('input');
-                csrfToken.type = 'hidden';
-                csrfToken.name = '_token';
-                csrfToken.value = '{{ csrf_token() }}';
-                
-                const methodField = document.createElement('input');
-                methodField.type = 'hidden';
-                methodField.name = '_method';
-                methodField.value = 'DELETE';
-                
-                form.appendChild(csrfToken);
-                form.appendChild(methodField);
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
     }
 }
 </script>

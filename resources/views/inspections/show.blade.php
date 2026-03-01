@@ -891,11 +891,6 @@
                 {{ $isPassed ? 'Certificate (PASSED)' : 'Certificate (FAILED)' }}
             </a>
         @endif
-        <button @click="deleteInspection()" 
-                class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition duration-150 ml-auto">
-            <i class="fas fa-trash mr-2"></i>
-            Delete Inspection
-        </button>
     </div>
 </div>
 
@@ -903,28 +898,6 @@
 <script>
 function inspectionDetails() {
     return {
-        deleteInspection() {
-            if (confirm('Are you sure you want to delete this inspection record? This action cannot be undone.')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '{{ route("inspections.destroy", $inspection->id) }}';
-                
-                const csrfToken = document.createElement('input');
-                csrfToken.type = 'hidden';
-                csrfToken.name = '_token';
-                csrfToken.value = '{{ csrf_token() }}';
-                
-                const methodField = document.createElement('input');
-                methodField.type = 'hidden';
-                methodField.name = '_method';
-                methodField.value = 'DELETE';
-                
-                form.appendChild(csrfToken);
-                form.appendChild(methodField);
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
     }
 }
 </script>

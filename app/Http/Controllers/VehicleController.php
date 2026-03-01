@@ -4,15 +4,23 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LoadsDepartments;
 
 class VehicleController extends Controller
 {
+    use LoadsDepartments;
     public function index(Request $request)
     {
         $perPage   = 20;
         $page      = (int) $request->get('page', 1);
         $offset    = ($page - 1) * $perPage;
-        $hasRegFilter = $request->filled('owner') || $request->filled('chassis_no');
+
+        // Resolve department filter — supports both state IDs (expands to centers) and center IDs
+        $deptFilterIds = $request->filled('department')
+            ? $this->resolveDeptFilter($request->department)
+            : [];
+
+        $hasRegFilter = $request->filled('owner') || $request->filled('chassis_no') || !empty($deptFilterIds);
 
         if ($hasRegFilter) {
             // --- Filter path: search i_vehicle_register directly ---
@@ -36,6 +44,9 @@ class VehicleController extends Controller
             }
             if ($request->filled('chassis_no')) {
                 $regQuery->where('r.chassisno', 'LIKE', '%' . $request->chassis_no . '%');
+            }
+            if (!empty($deptFilterIds)) {
+                $regQuery->whereIn('r.dept_id', $deptFilterIds);
             }
 
             // Wrap to keep only the latest row per vehicle
@@ -79,12 +90,14 @@ class VehicleController extends Controller
             );
 
             if ($page20->isEmpty()) {
-                $vehicles = new \Illuminate\Pagination\LengthAwarePaginator(
+                $vehicles     = new \Illuminate\Pagination\LengthAwarePaginator(
                     collect(), $total, $perPage, $page,
                     ['path' => $request->url(), 'query' => $request->query()]
                 );
                 $vehicleTypes = collect();
-                return view('vehicles.index', compact('vehicles', 'vehicleTypes'));
+                $departments  = $this->getGroupedDepartments();
+                $deptLookup   = $this->getDeptLookup();
+                return view('vehicles.index', compact('vehicles', 'vehicleTypes', 'departments', 'deptLookup'));
             }
 
             $pairs = $page20->map(fn($r) => [$r->plateno, $r->vehicletype])->toArray();
@@ -133,7 +146,10 @@ class VehicleController extends Controller
             DB::table('i_data_base')->distinct()->orderBy('vehicletype')->pluck('vehicletype')
         );
 
-        return view('vehicles.index', compact('vehicles', 'vehicleTypes'));
+        $departments = $this->getGroupedDepartments();
+        $deptLookup  = $this->getDeptLookup();
+
+        return view('vehicles.index', compact('vehicles', 'vehicleTypes', 'departments', 'deptLookup'));
     }
     
     public function create()

@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Carbon\Carbon;
+use App\Traits\LoadsDepartments;
 
 class ReportController extends Controller
 {
+    use LoadsDepartments;
     public function index()
     {
         $today     = Carbon::today()->format('Y-m-d');
@@ -85,22 +87,27 @@ class ReportController extends Controller
         $query = DB::table('i_data_base')
             ->select(
                 'i_data_base.*',
-                'i_vehicle_base.makeofvehicle',
-                'i_vehicle_base.model',
-                'i_vehicle_base.owner',
+                'i_vehicle_register.makeofvehicle',
+                'i_vehicle_register.model',
+                'i_vehicle_register.owner',
                 'sys_dept.title as department_name'
             )
-            ->leftJoin('i_vehicle_base', function($join) {
-                $join->on('i_data_base.plateno', '=', 'i_vehicle_base.plateno')
-                     ->on('i_data_base.vehicletype', '=', 'i_vehicle_base.vehicletype');
+            ->leftJoin('i_vehicle_register', function($join) {
+                $join->on('i_data_base.plateno',      '=', 'i_vehicle_register.plateno')
+                     ->on('i_data_base.vehicletype',  '=', 'i_vehicle_register.vehicletype')
+                     ->on('i_data_base.seriesno',     '=', 'i_vehicle_register.seriesno')
+                     ->on('i_data_base.inspecttimes', '=', 'i_vehicle_register.inspecttimes');
             })
             ->leftJoin('sys_dept', 'i_data_base.dept_id', '=', 'sys_dept.id')
             ->whereBetween('i_data_base.inspectdate', [$date . ' 00:00:00', $date . ' 23:59:59']);
         
         if ($deptId) {
-            $query->where('i_data_base.dept_id', $deptId);
+            $resolvedIds = $this->resolveDeptFilter($deptId);
+            if (!empty($resolvedIds)) {
+                $query->whereIn('i_data_base.dept_id', $resolvedIds);
+            }
         }
-        
+
         $inspections = $query->get();
         
         $passed  = $inspections->whereIn('testresult', ['1', 'Y'])->count();
@@ -131,10 +138,10 @@ class ReportController extends Controller
             ];
         })->sortByDesc('total')->values();
 
-        $departments = DB::table('sys_dept')->where('status', 1)->get();
+        $departments = $this->getGroupedDepartments();
 
         if ($request->get('format') === 'pdf') {
-            $pdf = PDF::loadView('reports.daily-pdf', compact('inspections', 'stats', 'date'));
+            $pdf = PDF::loadView('reports.daily-pdf', compact('inspections', 'stats', 'date', 'deptBreakdown'));
             return $pdf->download('daily-report-' . $date . '.pdf');
         }
 
@@ -159,7 +166,10 @@ class ReportController extends Controller
             ->whereBetween('inspectdate', [$monthStart, $monthEnd . ' 23:59:59']);
 
         if ($deptId) {
-            $query->where('dept_id', $deptId);
+            $resolvedIds = $this->resolveDeptFilter($deptId);
+            if (!empty($resolvedIds)) {
+                $query->whereIn('dept_id', $resolvedIds);
+            }
         }
 
         $inspections = $query->get();
@@ -194,18 +204,18 @@ class ReportController extends Controller
             }
         })->map(function($group) {
             return [
-                'total' => $group->count(),
-                'passed' => $group->where('testresult', '1')->count(),
-                'failed' => $group->where('testresult', '0')->count(),
+                'total'  => $group->count(),
+                'passed' => $group->whereIn('testresult', ['1', 'Y'])->count(),
+                'failed' => $group->whereIn('testresult', ['0', 'N'])->count(),
             ];
         })->sortKeys();
-        
+
         // Group by vehicle type - count records per vehicle type
         $vehicleTypeStats = $inspections->groupBy('vehicletype')->map(function($group) {
             return [
-                'total' => $group->count(),
-                'passed' => $group->where('testresult', '1')->count(),
-                'failed' => $group->where('testresult', '0')->count(),
+                'total'  => $group->count(),
+                'passed' => $group->whereIn('testresult', ['1', 'Y'])->count(),
+                'failed' => $group->whereIn('testresult', ['0', 'N'])->count(),
             ];
         })->sortKeys();
         
@@ -229,15 +239,18 @@ class ReportController extends Controller
             )
             ->leftJoin('sys_dept', 'i_data_base.dept_id', '=', 'sys_dept.id')
             ->whereBetween('i_data_base.inspectdate', [$monthStart, $monthEnd . ' 23:59:59']);
-        
-        // Apply department filter if selected
+
+        // Apply department filter with state→centers expansion
         if ($deptId) {
-            $departmentStatsQuery->where('i_data_base.dept_id', $deptId);
+            $resolvedForStats = $this->resolveDeptFilter($deptId);
+            if (!empty($resolvedForStats)) {
+                $departmentStatsQuery->whereIn('i_data_base.dept_id', $resolvedForStats);
+            }
         }
-        
+
         $departmentStats = $departmentStatsQuery
             ->groupBy('sys_dept.id', 'sys_dept.title')
-            ->orderBy('sys_dept.title')
+            ->orderByDesc(DB::raw('COUNT(*)'))
             ->get();
         
         // Inspector performance - count records per inspector
@@ -245,23 +258,23 @@ class ReportController extends Controller
             return !empty($item->inspector);
         })->groupBy('inspector')->map(function($group) {
             return [
-                'total' => $group->count(),
-                'passed' => $group->where('testresult', '1')->count(),
-                'failed' => $group->where('testresult', '0')->count(),
+                'total'  => $group->count(),
+                'passed' => $group->whereIn('testresult', ['1', 'Y'])->count(),
+                'failed' => $group->whereIn('testresult', ['0', 'N'])->count(),
             ];
         });
-        
+
         // Group by inspection type - count records per inspection type
         $inspectionTypeStats = $inspections->groupBy('inspecttype')->map(function($group) {
             return [
-                'total' => $group->count(),
-                'passed' => $group->where('testresult', '1')->count(),
-                'failed' => $group->where('testresult', '0')->count(),
+                'total'  => $group->count(),
+                'passed' => $group->whereIn('testresult', ['1', 'Y'])->count(),
+                'failed' => $group->whereIn('testresult', ['0', 'N'])->count(),
             ];
         });
         
-        $departments = DB::table('sys_dept')->where('status', 1)->get();
-        
+        $departments = $this->getGroupedDepartments();
+
         // Handle export formats
         if ($request->get('format') === 'pdf') {
             $pdf = PDF::loadView('reports.monthly-pdf', compact(
@@ -509,29 +522,43 @@ class ReportController extends Controller
     
     public function departmentReport(Request $request)
     {
-        // Accept either a single value or an array (name="departments[]")
-        $deptIds = array_filter((array) $request->get('departments', []));
+        $deptId   = $request->get('department');
         $dateFrom = $request->get('date_from', Carbon::now()->subMonth()->format('Y-m-d'));
         $dateTo   = $request->get('date_to',   Carbon::now()->format('Y-m-d'));
 
-        $departments = DB::table('sys_dept')->where('status', 1)->orderBy('title')->get();
+        $departments = $this->getGroupedDepartments();
+
+        if (empty($deptId)) {
+            return view('reports.department', compact('departments', 'dateFrom', 'dateTo'));
+        }
+
+        // Expand state → child centers, or use the single center directly
+        $deptIds = $this->resolveDeptFilter($deptId);
 
         if (empty($deptIds)) {
-            return view('reports.department', compact('departments'));
+            return view('reports.department', compact('departments', 'dateFrom', 'dateTo'));
         }
 
         $dateRange = [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'];
 
-        // All inspections across selected departments in one query
+        // Flat id→title lookup for the resolved center IDs
+        $flatDepts = DB::table('sys_dept')
+            ->select('id', 'title')
+            ->whereIn('id', $deptIds)
+            ->where('status', 1)
+            ->get()
+            ->keyBy('id');
+
+        // All inspections across resolved departments in one query
         $allInspections = DB::table('i_data_base')
             ->whereIn('dept_id', $deptIds)
             ->whereBetween('inspectdate', $dateRange)
             ->get();
 
         // Aggregate totals
-        $totalPassed  = $allInspections->whereIn('testresult', ['1', 'Y'])->count();
-        $totalFailed  = $allInspections->whereIn('testresult', ['0', 'N'])->count();
-        $totalTotal   = $allInspections->count();
+        $totalPassed    = $allInspections->whereIn('testresult', ['1', 'Y'])->count();
+        $totalFailed    = $allInspections->whereIn('testresult', ['0', 'N'])->count();
+        $totalTotal     = $allInspections->count();
         $totalCompleted = $totalPassed + $totalFailed;
 
         $stats = [
@@ -542,15 +569,17 @@ class ReportController extends Controller
             'pass_rate' => $totalCompleted > 0 ? round(($totalPassed / $totalCompleted) * 100, 2) : 0,
         ];
 
-        // Per-department breakdown
-        $selectedDepts = $departments->whereIn('id', $deptIds);
+        // Per-department breakdown (one row per resolved center)
         $deptBreakdown = [];
-        foreach ($selectedDepts as $dept) {
-            $rows    = $allInspections->where('dept_id', $dept->id);
-            $passed  = $rows->whereIn('testresult', ['1', 'Y'])->count();
-            $failed  = $rows->whereIn('testresult', ['0', 'N'])->count();
-            $total   = $rows->count();
-            $comp    = $passed + $failed;
+        foreach ($deptIds as $id) {
+            $dept = $flatDepts->get($id);
+            if (!$dept) continue;
+
+            $rows   = $allInspections->where('dept_id', $id);
+            $passed = $rows->whereIn('testresult', ['1', 'Y'])->count();
+            $failed = $rows->whereIn('testresult', ['0', 'N'])->count();
+            $total  = $rows->count();
+            $comp   = $passed + $failed;
 
             $deptBreakdown[] = [
                 'id'          => $dept->id,
@@ -566,15 +595,12 @@ class ReportController extends Controller
             ];
         }
 
-        // For single-dept backwards-compat (PDF uses $department)
-        $department = count($deptIds) === 1
-            ? $departments->firstWhere('id', $deptIds[0])
-            : null;
+        // $department: the selected node (state or center) for the header label
+        $selectedNode = DB::table('sys_dept')->select('id', 'title', 'pid')->where('id', $deptId)->first();
+        $department   = count($deptBreakdown) === 1 ? $flatDepts->get($deptIds[0]) : $selectedNode;
 
         if ($request->get('format') === 'pdf') {
-            $pdfName = $department
-                ? 'department-report-' . $department->title . '.pdf'
-                : 'department-report-combined.pdf';
+            $pdfName = 'department-report-' . str_replace(' ', '-', $department->title ?? 'report') . '.pdf';
             $pdf = PDF::loadView('reports.department-pdf', compact(
                 'department', 'deptBreakdown', 'stats', 'dateFrom', 'dateTo'
             ));
@@ -583,7 +609,7 @@ class ReportController extends Controller
 
         return view('reports.department', compact(
             'departments', 'department', 'deptBreakdown', 'stats',
-            'dateFrom', 'dateTo', 'deptIds'
+            'dateFrom', 'dateTo', 'deptId'
         ));
     }
     

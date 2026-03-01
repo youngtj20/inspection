@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Traits\LoadsDepartments;
 
 class InspectionController extends Controller
 {
+    use LoadsDepartments;
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -59,7 +61,12 @@ class InspectionController extends Controller
         }
 
         if ($request->filled('department')) {
-            $query->where('i_data_base.dept_id', $request->department);
+            // resolveDeptFilter handles both state IDs (expands to all child centers)
+            // and center IDs (filters directly)
+            $deptIds = $this->resolveDeptFilter($request->department);
+            if (!empty($deptIds)) {
+                $query->whereIn('i_data_base.dept_id', $deptIds);
+            }
         }
 
         if ($request->filled('test_result')) {
@@ -123,10 +130,10 @@ class InspectionController extends Controller
             ->simplePaginate(10)
             ->appends($request->except('page'));
 
-        // Cache departments list for 6 hours (almost never changes)
-        $departments = cache()->remember('sys_dept_active', 21600, fn() =>
-            DB::table('sys_dept')->select('id', 'title')->where('status', 1)->orderBy('title')->get()
-        );
+        // Grouped departments: states with their centers (cached 6h)
+        $departments = $this->getGroupedDepartments();
+        // Flat id→title map for resolving filter labels in the view
+        $deptLookup  = $this->getDeptLookup();
 
         // Cache vehicle types for 6 hours (stable list)
         $vehicleTypes = cache()->remember('vehicle_types_idb_' . ($user->dept_id ?: 'all'), 21600, fn() =>
@@ -146,13 +153,13 @@ class InspectionController extends Controller
             'current_page' => $inspections->count()
         ];
         
-        return view('inspections.index', compact('inspections', 'departments', 'vehicleTypes', 'stats'));
+        return view('inspections.index', compact('inspections', 'departments', 'deptLookup', 'vehicleTypes', 'stats'));
     }
     
     public function create()
     {
         // Do NOT load all vehicles — the form uses a live search endpoint instead
-        $departments = DB::table('sys_dept')->select('id', 'title')->where('status', 1)->orderBy('title')->get();
+        $departments = $this->getGroupedDepartments();
 
         return view('inspections.create', compact('departments'));
     }
